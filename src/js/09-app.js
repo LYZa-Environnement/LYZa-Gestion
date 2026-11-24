@@ -804,12 +804,36 @@
 
   // ---------- Recherche d'analyses (fenêtre) ----------
 
+  /** Composition d'un pack : familles, paramètres qui correspondent à la recherche, détail dépliable. */
+  function composition(a, texte) {
+    L.completerAnalyse(a)
+    const trouves = L.correspondances(a, texte)
+    const contenu = a.contenu || []
+    return [
+      trouves.length ? h('span', { class: 'res-contient' }, `Contient : ${trouves.join(', ')}`) : null,
+      a.composants?.length ? h('span', { class: 'res-familles' }, `Pack : ${a.composants.join(' · ')}`) : null,
+      contenu.length > 1
+        ? h(
+            'details',
+            { class: 'res-detail' },
+            h(
+              'summary',
+              null,
+              `Voir les ${contenu.length} paramètres` +
+                (a.contenuSource === 'intitulé' ? ' (d’après l’intitulé du pack)' : a.contenuSource === 'laboratoire et intitulé' ? ' (annexe du laboratoire, complétée d’après l’intitulé)' : ''),
+            ),
+            h('p', null, contenu.join(', ')),
+          )
+        : null,
+    ]
+  }
+
   function rechercherAnalyse(doc) {
     if (!state.analyses) {
       if (confirm("Aucun catalogue de laboratoire n'est importé sur cet appareil. Ouvrir l'onglet Analyses pour l'importer ?")) location.hash = '#/analyses'
       return
     }
-    const opts = { q: '', matrice: '', n: 1 }
+    const opts = { q: '', matrice: '', n: 1, packs: false }
     const recherche = h('input', { type: 'search', placeholder: 'Ex. : arsenic, HAP eau, pesticides sol, PLSDE…', 'aria-label': 'Rechercher une analyse' })
     const matrice = h(
       'select',
@@ -819,11 +843,16 @@
     )
     const nb = h('input', { type: 'number', min: 1, value: 1, 'aria-label': "Nombre d'échantillons", class: 'nb-ech' })
     const frais = h('input', { type: 'checkbox', checked: !doc.lignes.some((l) => l.code === 'LAB-ECH') })
+    const packsSeuls = h('input', { type: 'checkbox' })
+    packsSeuls.addEventListener('change', () => {
+      opts.packs = packsSeuls.checked
+      draw()
+    })
     const liste = h('div', { class: 'res-list', role: 'list' })
     const compte = h('span', { class: 'hint' })
 
     const draw = () => {
-      const res = L.rechercherAnalyses(state.analyses, opts.q, { matrice: opts.matrice, limite: 60 })
+      const res = L.rechercherAnalyses(state.analyses, opts.q, { matrice: opts.matrice, limite: 60, packs: opts.packs })
       compte.textContent = res.length >= 60 ? '60 premiers résultats — précisez la recherche' : `${res.length} résultat${res.length > 1 ? 's' : ''}`
       fill(
         liste,
@@ -852,6 +881,7 @@
               { class: 'res-main' },
               h('strong', null, a.nom),
               a.description ? h('span', { class: 'res-desc' }, a.description) : null,
+              composition(a, opts.q),
               h('span', { class: 'res-meta' }, [a.code, L.MATRICES[a.matrice], a.rubrique, a.delai ? `délai ${a.delai} j` : ''].filter(Boolean).join(' · ')),
             ),
             h('div', { class: 'res-prix' }, h('strong', null, L.euros(pv)), h('span', null, `labo ${L.euros(a.prix)}`)),
@@ -874,7 +904,12 @@
       { class: 'modal modal--large' },
       h('div', { class: 'modal-head' }, h('h3', null, 'Rechercher une analyse'), compte),
       h('div', { class: 'res-filtres' }, recherche, matrice, h('label', { class: 'nb-label' }, 'Échantillons ', nb)),
-      h('label', { class: 'check' }, frais, ' Ajouter les frais de laboratoire (par échantillon et par envoi), si absents'),
+      h(
+        'div',
+        { class: 'res-options' },
+        h('label', { class: 'check' }, packsSeuls, ' Packs uniquement'),
+        h('label', { class: 'check' }, frais, ' Ajouter les frais de laboratoire (par échantillon et par envoi), si absents'),
+      ),
       liste,
       h(
         'div',
@@ -1593,7 +1628,7 @@
     const tbody = h('tbody')
     const compte = h('p', { class: 'hint' })
     const dessiner = () => {
-      const res = L.rechercherAnalyses(cat, recherche.value, { matrice: matrice.value, limite: 300 })
+      const res = L.rechercherAnalyses(cat, recherche.value, { matrice: matrice.value, limite: 300, packs: packsSeuls.checked })
       compte.textContent = res.length >= 300 ? '300 premiers résultats affichés — précisez la recherche.' : `${res.length} analyse${res.length > 1 ? 's' : ''}.`
       fill(
         tbody,
@@ -1603,7 +1638,7 @@
             'tr',
             null,
             h('td', { class: 'mono' }, a.code),
-            h('td', null, h('strong', null, a.nom), a.description ? h('div', { class: 'res-desc' }, a.description) : null),
+            h('td', { class: 'res-main' }, h('strong', null, a.nom), a.description ? h('div', { class: 'res-desc' }, a.description) : null, composition(a, recherche.value)),
             h('td', null, L.MATRICES[a.matrice]),
             h('td', null, a.rubrique),
             h('td', { class: 'num' }, a.delai ? `${a.delai} j` : '—'),
@@ -1614,6 +1649,8 @@
         }),
       )
     }
+    const packsSeuls = h('input', { type: 'checkbox' })
+    packsSeuls.addEventListener('change', () => dessiner())
     recherche.addEventListener('input', dessiner)
     matrice.addEventListener('change', dessiner)
 
@@ -1660,7 +1697,7 @@
         ),
         exemple,
       ),
-      h('div', { class: 'row search-row' }, recherche, matrice),
+      h('div', { class: 'row search-row' }, recherche, matrice, h('label', { class: 'check' }, packsSeuls, ' Packs uniquement')),
       compte,
       h(
         'div',
