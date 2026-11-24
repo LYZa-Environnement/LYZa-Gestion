@@ -9,6 +9,7 @@ LYZa_outils_sauvegarde_*.json
 # Catalogue du laboratoire (prix d'achat négociés) : il s'importe dans
 # l'onglet Analyses, il ne doit pas être publié.
 LYZa_analyses_*.json
+LYZa_prospects_*.json
 *.xlsx
 
 node_modules/

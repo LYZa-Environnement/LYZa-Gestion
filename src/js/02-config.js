@@ -177,7 +177,56 @@
     defavorable: { libelle: 'Défavorable', phrase: 'est jugé **défavorable**' },
   }
 
+  // ---------- Prospection et suivi du business plan ----------
+
+  const STATUTS_PROSPECT = ['À contacter', 'Courrier envoyé', 'Contacté', 'Rendez-vous pris', 'Partenaire', 'Pas intéressé']
+
+  // Objectifs du business plan « forages » (régime de croisière, à partir de 2028).
+  const OBJECTIFS = {
+    foragesBas: 12,
+    foragesHaut: 18,
+    netMensuelBas: 300,
+    netMensuelHaut: 500,
+    partenaires: 4,
+    fraisFixes: 1500,
+  }
+
+  const PLAN_ACTION = [
+    { phase: 'Cadrer — décembre 2026', texte: 'Faire confirmer par la DREAL ou un organisme certificateur qu’un prestataire peut rédiger la coupe et le rapport de fin de travaux' },
+    { phase: 'Cadrer — décembre 2026', texte: 'Compter les décisions de cas par cas « forage » de la DREAL pour la Manche (2023-2025)' },
+    { phase: 'Cadrer — décembre 2026', texte: 'Envoyer le courrier et la plaquette aux foreurs de priorité 1' },
+    { phase: 'Écouter — janvier-février 2027', texte: 'Rencontrer 6 à 8 foreurs : volumes, saisons, prix pratiqués, habitudes de travail' },
+    { phase: 'Écouter — janvier-février 2027', texte: 'Tester les prix : coupe 150 €, rapport 300 €, déclarations' },
+    { phase: 'Pilote — mars-juin 2027', texte: 'Réaliser 3 à 5 dossiers pilotes avec un ou deux foreurs' },
+    { phase: 'Pilote — mars-juin 2027', texte: 'Faire relire un dossier par la DDTM ou un auditeur' },
+    { phase: 'Lancer — juillet-décembre 2027', texte: 'Formaliser 3 ou 4 partenariats sur une page : prix, délais, rôle de chacun, pas d’exclusivité' },
+    { phase: 'Lancer — juillet-décembre 2027', texte: 'Accompagner la certification des foreurs partenaires' },
+    { phase: 'Lancer — juillet-décembre 2027', texte: 'Bilan : 12 à 18 forages par an sont-ils atteignables ?' },
+  ]
+
+  // Modèle du courrier aux entreprises de forage. {accroche} est remplacé par la
+  // phrase propre à chaque entreprise (fiche de l'entreprise).
+  const COURRIER = {
+    objet: 'Réforme des forages au 31 décembre 2027 — proposition de partenariat pour vos documents techniques',
+    corps: [
+      'Madame, Monsieur,',
+      'Hydrogéologue installé à Regnéville-sur-Mer, je propose aux entreprises de forage de la Manche de prendre en charge la partie écrite de leurs chantiers.',
+      'À compter du 31 décembre 2027, l’arrêté du 18 mars 2026 imposera pour chaque forage d’eau une coupe géologique prévisionnelle établie avant les travaux et un rapport de fin de travaux remis au maître d’ouvrage dans les deux mois ; seules les entreprises certifiées pourront forer. Ces documents demandent du temps, au moment où vos équipes sont sur le terrain.',
+      'Je vous propose de les préparer pour vous, à partir de vos relevés de chantier :\n- la coupe géologique prévisionnelle, remise sous 48 heures ouvrées ;\n- le rapport de fin de travaux, avec l’interprétation de l’essai de pompage ;\n- les déclarations : loi sur l’eau jusqu’à fin 2027, puis code minier, et examen au cas par cas pour les forages de 50 m et plus.',
+      'Je peux aussi vous aider, dès 2027, à préparer votre dossier de certification : modèles de documents, organisation des données de chantier, références pour l’audit.',
+      '{accroche}',
+      'Mes prix sont forfaitaires et connus avant chaque chantier. Je travaille aux côtés de l’entreprise de forage, pas à sa place : vous restez l’interlocuteur de vos clients.',
+      'Je serais heureux de vous présenter cette offre lors d’un rendez-vous, chez vous ou sur un chantier, à la date qui vous conviendra. Vous trouverez ci-joint une plaquette de présentation.',
+      'Je vous prie d’agréer, Madame, Monsieur, l’expression de mes salutations distinguées.',
+    ].join('\n\n'),
+    pj: 'Plaquette de présentation LYZa',
+  }
+
   Object.assign(L, {
+    STATUTS_PROSPECT,
+    OBJECTIFS,
+    PLAN_ACTION,
+    COURRIER,
     PARAMETRES,
     TYPES_CLIENT,
     conditionsFacture,

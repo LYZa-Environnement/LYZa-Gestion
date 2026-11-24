@@ -10,6 +10,7 @@
     ['devis', 'Devis'],
     ['facture', 'Factures'],
     ['avis', 'Avis sommaires'],
+    ['prospection', 'Prospection'],
     ['catalogue', 'Catalogue'],
     ['analyses', 'Analyses'],
     ['parametres', 'Paramètres'],
@@ -81,6 +82,11 @@
     if (['devis', 'facture', 'avis'].includes(vue)) {
       if (id) await ouvrir(vue, decodeURIComponent(id))
       else await liste(vue)
+    } else if (vue === 'courrier' && id) {
+      document.querySelector('.bar-nav a[data-k="prospection"]')?.classList.add('active')
+      await ouvrir('courrier', decodeURIComponent(id))
+    } else if (vue === 'prospection') {
+      await vueProspection()
     } else if (vue === 'analyses') {
       vueAnalyses()
     } else if (vue === 'catalogue') {
@@ -438,11 +444,17 @@
     previewHost = h('div', { class: 'preview-sheet' })
     const previewBox = h('div', { class: 'preview' }, h('div', { class: 'preview-scale' }, previewHost))
     const outils = [
-      btn('← Retour', () => (location.hash = `#/${doc.kind}`), 'btn--ghost'),
+      btn('← Retour', () => (location.hash = doc.kind === 'courrier' ? '#/prospection' : `#/${doc.kind}`), 'btn--ghost'),
       btn('Imprimer / PDF', imprimer, 'btn--primary'),
       btn('Word (.docx)', exporterWord),
     ]
     if (doc.kind === 'devis') outils.push(btn('Créer la facture', () => factureDepuisDevis(doc)))
+    if (doc.kind === 'courrier') {
+      outils.push(
+        btn('Copier pour un e-mail', () => copierEmail(doc)),
+        btn('Marquer comme envoyé', () => marquerEnvoye(doc)),
+      )
+    }
     fill(main, 
       h('div', { class: 'editor-bar' }, outils, h('span', { class: 'editor-title' }, titreDoc(doc))),
       h('div', { class: 'editor' }, formHost, previewBox),
@@ -457,6 +469,7 @@
   }
 
   function titreDoc(doc) {
+    if (doc.kind === 'courrier') return `Courrier — ${doc.destinataire?.nom || 'entreprise'}`
     if (doc.kind === 'avis') return `Avis — ${L.siteAvis(doc) || 'nouveau'}`
     return `${doc.kind === 'devis' ? 'Devis' : 'Facture'} n° ${doc.numero}`
   }
@@ -464,7 +477,8 @@
   function construireFormulaire() {
     const y = window.scrollY
     const doc = state.doc
-    const sections = doc.kind === 'devis' ? formDevis(doc) : doc.kind === 'facture' ? formFacture(doc) : formAvis(doc)
+    const sections =
+      doc.kind === 'devis' ? formDevis(doc) : doc.kind === 'facture' ? formFacture(doc) : doc.kind === 'courrier' ? formCourrier(doc) : formAvis(doc)
     fill(formHost, ...sections)
     window.scrollTo(0, y)
   }
@@ -1715,6 +1729,425 @@
       ),
     )
     dessiner()
+  }
+
+  // ---------- Prospection et suivi du business plan ----------
+
+  const NIVEAUX = { 1: 'Priorité 1', 2: 'Priorité 2', 3: 'Priorité 3' }
+
+  function prospectVide() {
+    return {
+      id: L.uid(),
+      entreprise: '',
+      siren: '',
+      adresse: '',
+      commune: '',
+      contact: '',
+      telephone: '',
+      email: '',
+      site: '',
+      priorite: '2',
+      statut: 'À contacter',
+      angle: '',
+      activites: '',
+      accroche: '',
+      prochaineAction: '',
+      prochaineDate: '',
+      journal: [],
+    }
+  }
+
+  /** Indicateurs de l'année en cours, calculés depuis les factures et les devis. */
+  async function indicateursBP(objectifs) {
+    const annee = L.today().slice(0, 4)
+    const mois = Number(L.today().slice(5, 7))
+    const charges = (Number(state.params.analyses?.charges) || 28) / 100
+    const factures = (await L.listDocs('facture')).filter((f) => String(f.dateEmission).startsWith(annee) && f.statut !== 'brouillon')
+    const devis = (await L.listDocs('devis')).filter((d) => String(d.dateEmission).startsWith(annee))
+    let ca = 0
+    let encaisse = 0
+    let labo = 0
+    let forages = 0
+    for (const f of factures) {
+      const t = L.totaux(f)
+      ca += t.ht
+      if (f.statut === 'payée') encaisse += t.ht
+      for (const l of f.lignes) labo += L.parseNumber(l.quantite) * (Number(l.prixLabo) || 0)
+      forages += Math.max(0, ...f.lignes.filter((l) => /^FOR-(COUPE|RFT)$/.test(l.code || '')).map((l) => L.parseNumber(l.quantite)))
+    }
+    const fixes = (Number(objectifs.fraisFixes) || 0) * (mois / 12)
+    const net = ca * (1 - charges) - labo - fixes
+    const enCours = devis.filter((d) => d.statut === 'envoyé').reduce((s, d) => s + L.totaux(d).ht, 0)
+    const acceptes = devis.filter((d) => d.statut === 'accepté').reduce((s, d) => s + L.totaux(d).ht, 0)
+    return { annee, mois, ca, encaisse, net, netMensuel: net / mois, forages, foragesProjetes: (forages / mois) * 12, enCours, acceptes }
+  }
+
+  function jauge(libelle, valeur, bas, haut, format) {
+    const max = Math.max(haut * 1.2, valeur, 1)
+    const pct = (v) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`
+    const etat = valeur >= haut ? 'ok' : valeur >= bas ? 'mid' : 'low'
+    return h(
+      'div',
+      { class: 'kpi' },
+      h('div', { class: 'kpi-head' }, h('span', null, libelle), h('strong', null, format(valeur))),
+      h(
+        'div',
+        { class: 'kpi-bar', role: 'img', 'aria-label': `${libelle} : ${format(valeur)}, objectif ${format(bas)} à ${format(haut)}` },
+        h('div', { class: 'kpi-cible', style: { left: pct(bas), width: `calc(${pct(haut)} - ${pct(bas)})` } }),
+        h('div', { class: `kpi-val kpi-val--${etat}`, style: { width: pct(valeur) } }),
+      ),
+      h('div', { class: 'kpi-foot' }, `Objectif : ${format(bas)} à ${format(haut)}`),
+    )
+  }
+
+  async function vueProspection() {
+    const suivi = await L.suiviBP()
+    let prospects = await L.prospects()
+    const ind = await indicateursBP(suivi.objectifs)
+    const o = suivi.objectifs
+    let ouvert = null
+    let filtre = ''
+
+    const sauverSuivi = L.debounce(async () => {
+      await L.db.set('suiviBP', suivi)
+      saveLabel.textContent = 'Suivi enregistré ✓'
+    }, 400)
+    const sauverProspects = L.debounce(async () => {
+      await L.db.set('prospects', prospects)
+      saveLabel.textContent = 'Entreprises enregistrées ✓'
+    }, 400)
+    onChange = () => {
+      sauverSuivi()
+      sauverProspects()
+    }
+
+    // --- Indicateurs
+    const nbPartenaires = prospects.filter((x) => x.statut === 'Partenaire').length
+    const kpis = h(
+      'div',
+      { class: 'kpis' },
+      jauge(`Forages facturés en ${ind.annee} (rythme annuel)`, Math.round(ind.foragesProjetes), o.foragesBas, o.foragesHaut, (v) => `${Math.round(v)}`),
+      jauge('Bénéfice net par mois (après charges et frais fixes)', Math.round(ind.netMensuel), o.netMensuelBas, o.netMensuelHaut, (v) => L.euros(Math.round(v))),
+      jauge('Foreurs partenaires', nbPartenaires, Math.max(1, o.partenaires - 1), o.partenaires, (v) => `${v}`),
+    )
+    const chiffres = h(
+      'p',
+      { class: 'hint' },
+      `${ind.annee}, ${ind.mois} mois écoulés : ${ind.forages} forages facturés, chiffre d’affaires ${L.euros(ind.ca)} (dont ${L.euros(ind.encaisse)} encaissés), bénéfice net estimé ${L.euros(Math.round(ind.net))}. Devis envoyés en attente : ${L.euros(ind.enCours)} ; devis acceptés : ${L.euros(ind.acceptes)}.`,
+    )
+
+    // --- Plan d'action
+    const planHost = h('div', { class: 'plan' })
+    const dessinerPlan = () => {
+      const phases = [...new Set(suivi.plan.map((x) => x.phase))]
+      fill(
+        planHost,
+        phases.map((ph) =>
+          h(
+            'div',
+            { class: 'plan-phase' },
+            h('h4', null, ph),
+            suivi.plan
+              .filter((x) => x.phase === ph)
+              .map((x) =>
+                h(
+                  'div',
+                  { class: 'plan-item' + (x.fait ? ' fait' : '') },
+                  chk(x, 'fait', x.texte, { onInput: () => dessinerPlan() }),
+                  btn('✕', () => {
+                    suivi.plan.splice(suivi.plan.indexOf(x), 1)
+                    dessinerPlan()
+                    onChange()
+                  }, 'btn--icon btn--ghost', { title: 'Retirer' }),
+                ),
+              ),
+          ),
+        ),
+      )
+    }
+    dessinerPlan()
+    const nouvelleTache = { phase: suivi.plan.at(-1)?.phase || 'Autres', texte: '' }
+
+    // --- Entreprises
+    const tableHost = h('div')
+    const dessinerProspects = () => {
+      const liste = prospects
+        .filter((x) => !filtre || x.statut === filtre)
+        .sort((a, b) => String(a.priorite).localeCompare(String(b.priorite)) || a.entreprise.localeCompare(b.entreprise, 'fr'))
+      fill(
+        tableHost,
+        liste.length
+          ? liste.map((x) => ficheProspect(x))
+          : h('p', { class: 'hint' }, prospects.length ? 'Aucune entreprise avec ce statut.' : 'Aucune entreprise pour le moment : importez la liste fournie (.json) ou ajoutez-en une.'),
+      )
+    }
+
+    function ficheProspect(x) {
+      const isOpen = ouvert === x.id
+      const derniere = x.journal?.at(-1)
+      const coord = [
+        x.adresse ? x.adresse.replace(/\n/g, ', ') : h('span', { class: 'manque' }, 'adresse à compléter'),
+        x.telephone ? h('a', { href: `tel:${x.telephone.replace(/\s/g, '')}` }, x.telephone) : null,
+        x.email ? h('a', { href: `mailto:${x.email}` }, x.email) : h('span', { class: 'manque' }, 'courriel à trouver'),
+      ].filter(Boolean)
+      const statut = sel(x, 'statut', L.STATUTS_PROSPECT.map((s) => [s, s]), { label: 'Statut', class: 'statut-sel', onInput: () => dessinerProspects() })
+      return h(
+        'div',
+        { class: 'pro' + (isOpen ? ' open' : '') },
+        h(
+          'div',
+          { class: 'pro-row' },
+          h('span', { class: `pill pill--p${x.priorite}` }, `P${x.priorite}`),
+          h(
+            'div',
+            { class: 'pro-main' },
+            h('strong', null, x.entreprise || 'Nouvelle entreprise'),
+            h('span', { class: 'res-meta' }, [x.commune, x.activites].filter(Boolean).join(' · ')),
+            h('span', { class: 'pro-coord' }, coord.flatMap((c, i) => (i ? [' · ', c] : [c]))),
+            derniere ? h('span', { class: 'res-meta' }, `Dernier contact : ${L.frDate(derniere.date)} — ${derniere.texte}`) : null,
+            x.prochaineAction ? h('span', { class: 'res-contient' }, `À faire${x.prochaineDate ? ` le ${L.frDate(x.prochaineDate)}` : ''} : ${x.prochaineAction}`) : null,
+          ),
+          statut,
+          h(
+            'div',
+            { class: 'pro-actions' },
+            btn('Courrier', () => nouveauCourrier(x), 'btn--small btn--primary'),
+            btn(isOpen ? 'Fermer' : 'Fiche', () => {
+              ouvert = isOpen ? null : x.id
+              dessinerProspects()
+            }, 'btn--small'),
+          ),
+        ),
+        isOpen ? editeurProspect(x) : null,
+      )
+    }
+
+    function editeurProspect(x) {
+      const note = { date: L.today(), texte: '' }
+      return h(
+        'div',
+        { class: 'pro-edit' },
+        row(field('Entreprise', inp(x, 'entreprise')), field('Commune', inp(x, 'commune')), field('Priorité', sel(x, 'priorite', Object.entries(NIVEAUX)))),
+        row(field('Adresse postale', area(x, 'adresse', { rows: 2 })), field('Interlocuteur', inp(x, 'contact', { placeholder: 'M. / Mme …, gérant' }))),
+        row(field('Téléphone', inp(x, 'telephone')), field('Courriel', inp(x, 'email', { type: 'email' })), field('Site', inp(x, 'site')), field('SIREN', inp(x, 'siren'))),
+        field('Activités', inp(x, 'activites')),
+        field('Angle d’approche (note interne)', area(x, 'angle', { rows: 2 })),
+        field('Phrase personnalisée du courrier', area(x, 'accroche', { rows: 2 }), 'Remplace {accroche} dans le modèle de courrier. Elle s’adresse à l’entreprise.'),
+        row(field('Prochaine action', inp(x, 'prochaineAction', { placeholder: 'Relancer par téléphone' })), field('Le', inp(x, 'prochaineDate', { type: 'date' }))),
+        h('h4', null, 'Journal des contacts'),
+        (x.journal || []).length
+          ? h('ul', { class: 'journal' }, x.journal.map((j) => h('li', null, h('strong', null, L.frDate(j.date)), ' — ', j.texte)))
+          : h('p', { class: 'hint' }, 'Aucun contact noté.'),
+        h(
+          'div',
+          { class: 'journal-add' },
+          inp(note, 'date', { type: 'date', label: 'Date' }),
+          inp(note, 'texte', { placeholder: 'Appel, rendez-vous, courrier…', label: 'Note' }),
+          btn('Noter', () => {
+            if (!note.texte.trim()) return
+            x.journal = [...(x.journal || []), { ...note }].sort((a, b) => a.date.localeCompare(b.date))
+            onChange()
+            dessinerProspects()
+          }, 'btn--small'),
+        ),
+        h(
+          'div',
+          { class: 'inline-actions' },
+          btn('Supprimer l’entreprise', () => {
+            if (!confirm(`Supprimer ${x.entreprise || 'cette entreprise'} de la liste ?`)) return
+            prospects = prospects.filter((y) => y !== x)
+            ouvert = null
+            onChange()
+            dessinerProspects()
+          }, 'btn--small btn--danger'),
+        ),
+      )
+    }
+
+    const filtreSel = h(
+      'select',
+      { 'aria-label': 'Filtrer par statut', class: 'search-matrice' },
+      h('option', { value: '' }, 'Tous les statuts'),
+      L.STATUTS_PROSPECT.map((s) => h('option', { value: s }, `${s} (${prospects.filter((x) => x.statut === s).length})`)),
+    )
+    filtreSel.addEventListener('change', () => {
+      filtre = filtreSel.value
+      dessinerProspects()
+    })
+
+    const fichier = h('input', { type: 'file', accept: '.json,application/json', class: 'visually-hidden', id: 'prospects-file' })
+    fichier.addEventListener('change', async () => {
+      const f = fichier.files?.[0]
+      if (!f) return
+      try {
+        const json = JSON.parse(await f.text())
+        if (json.format !== 'lyza-prospects' || !Array.isArray(json.entreprises)) throw new Error("Ce fichier n'est pas une liste d'entreprises LYZa.")
+        const connus = new Set(prospects.map((x) => L.normRecherche(x.entreprise)))
+        let n = 0
+        for (const e of json.entreprises) {
+          if (connus.has(L.normRecherche(e.entreprise))) continue
+          prospects.push({ ...prospectVide(), ...e, id: L.uid() })
+          n++
+        }
+        await L.db.set('prospects', prospects)
+        L.toast(`${n} entreprise${n > 1 ? 's' : ''} ajoutée${n > 1 ? 's' : ''}${json.entreprises.length > n ? ' (les autres étaient déjà dans la liste)' : ''}.`)
+        vueProspection()
+      } catch (e) {
+        L.toast(e.message, 'warn')
+      }
+    })
+
+    dessinerProspects()
+
+    fill(
+      main,
+      h('div', { class: 'list-head' }, h('h1', null, 'Suivi du business plan')),
+      card('Où en est-on ?', kpis, chiffres, h('p', { class: 'hint' }, 'Calculé depuis les factures émises de l’année (lignes coupe et rapport de fin de travaux pour les forages), les charges de l’onglet Analyses et les frais fixes ci-dessous, au prorata des mois écoulés.')),
+      h(
+        'details',
+        { class: 'card details-card' },
+        h('summary', null, 'Objectifs du business plan'),
+        row(
+          field('Forages par an (bas)', inp(o, 'foragesBas', { inputmode: 'numeric', onInput: (v) => (o.foragesBas = L.parseNumber(v)) })),
+          field('Forages par an (haut)', inp(o, 'foragesHaut', { inputmode: 'numeric', onInput: (v) => (o.foragesHaut = L.parseNumber(v)) })),
+          field('Net par mois, bas (€)', inp(o, 'netMensuelBas', { inputmode: 'numeric', onInput: (v) => (o.netMensuelBas = L.parseNumber(v)) })),
+          field('Net par mois, haut (€)', inp(o, 'netMensuelHaut', { inputmode: 'numeric', onInput: (v) => (o.netMensuelHaut = L.parseNumber(v)) })),
+          field('Partenaires visés', inp(o, 'partenaires', { inputmode: 'numeric', onInput: (v) => (o.partenaires = L.parseNumber(v)) })),
+          field('Frais fixes par an (€)', inp(o, 'fraisFixes', { inputmode: 'numeric', onInput: (v) => (o.fraisFixes = L.parseNumber(v)) })),
+        ),
+        h('p', { class: 'hint' }, 'Les indicateurs se mettent à jour au prochain affichage de l’onglet.'),
+      ),
+      card(
+        'Plan d’action',
+        planHost,
+        h(
+          'div',
+          { class: 'journal-add' },
+          inp(nouvelleTache, 'phase', { label: 'Phase', placeholder: 'Phase' }),
+          inp(nouvelleTache, 'texte', { label: 'Action', placeholder: 'Nouvelle action' }),
+          btn('Ajouter', () => {
+            if (!nouvelleTache.texte.trim()) return
+            suivi.plan.push({ phase: nouvelleTache.phase || 'Autres', texte: nouvelleTache.texte, fait: false })
+            onChange()
+            vueProspection()
+          }, 'btn--small'),
+        ),
+      ),
+      card(
+        'Entreprises à contacter',
+        fichier,
+        h(
+          'div',
+          { class: 'row search-row' },
+          filtreSel,
+          btn('+ Entreprise', () => {
+            const x = prospectVide()
+            prospects.push(x)
+            ouvert = x.id
+            onChange()
+            dessinerProspects()
+          }, 'btn--small'),
+          h('label', { class: 'btn btn--small', for: 'prospects-file' }, 'Importer une liste (.json)'),
+          btn('Exporter (.json)', () => {
+            const data = { format: 'lyza-prospects', version: 1, date: new Date().toISOString(), entreprises: prospects.map(({ id: _id, ...x }) => x) }
+            L.download(`LYZa_prospects_${L.compactDate(L.today())}.json`, new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }))
+          }, 'btn--small'),
+        ),
+        tableHost,
+      ),
+      h(
+        'details',
+        { class: 'card details-card' },
+        h('summary', null, 'Modèle de courrier aux entreprises de forage'),
+        h('p', { class: 'hint' }, 'Paragraphes séparés par une ligne vide ; une ligne commençant par « - » devient une puce. {accroche} est remplacé par la phrase personnalisée de chaque entreprise. Chaque courrier reste modifiable avant impression.'),
+        field('Objet', inp(suivi.courrier, 'objet')),
+        field('Corps du courrier', area(suivi.courrier, 'corps', { rows: 16 })),
+        field('Pièce jointe', inp(suivi.courrier, 'pj')),
+        h(
+          'div',
+          { class: 'inline-actions' },
+          btn('Revenir au modèle d’origine', async () => {
+            if (!confirm('Remplacer le modèle par le texte d’origine ?')) return
+            suivi.courrier = L.clone(L.COURRIER)
+            await L.db.set('suiviBP', suivi)
+            vueProspection()
+          }, 'btn--small btn--ghost'),
+        ),
+      ),
+    )
+  }
+
+  async function nouveauCourrier(x) {
+    const suivi = await L.suiviBP()
+    const t = L.today()
+    const docs = await L.listDocs('courrier')
+    const doc = {
+      id: L.uid(),
+      kind: 'courrier',
+      numero: L.numeroLibre(t, docs.map((d) => d.numero)),
+      prospectId: x.id,
+      date: t,
+      lieu: state.params.documents.lieu,
+      destinataire: { nom: x.entreprise, contact: x.contact || '', adresse: x.adresse || '' },
+      email: x.email || '',
+      objet: suivi.courrier.objet,
+      accroche: x.accroche || '',
+      corps: suivi.courrier.corps,
+      pj: suivi.courrier.pj,
+    }
+    await L.saveDoc(doc)
+    location.hash = `#/courrier/${encodeURIComponent(doc.id)}`
+  }
+
+  function formCourrier(doc) {
+    const d = doc.destinataire
+    return [
+      card(
+        'Destinataire',
+        row(field('Entreprise', inp(d, 'nom')), field('À l’attention de', inp(d, 'contact', { placeholder: 'Facultatif' }))),
+        field('Adresse', area(d, 'adresse', { rows: 3 }), d.adresse ? null : 'Adresse à compléter avant l’envoi postal.'),
+        field('Courriel (pour l’envoi par e-mail)', inp(doc, 'email', { type: 'email' })),
+      ),
+      card(
+        'Courrier',
+        row(field('Fait à', inp(doc, 'lieu')), field('Date', inp(doc, 'date', { type: 'date' }))),
+        field('Objet', inp(doc, 'objet')),
+        field('Phrase personnalisée ({accroche})', area(doc, 'accroche', { rows: 3 })),
+        field('Corps', area(doc, 'corps', { rows: 18 }), 'Une ligne vide sépare deux paragraphes ; « - » en début de ligne pour une puce.'),
+        field('Pièce jointe', inp(doc, 'pj')),
+      ),
+    ]
+  }
+
+  async function copierEmail(doc) {
+    const texte = L.texteCourrier(doc, state.params)
+    try {
+      await navigator.clipboard.writeText(`Objet : ${doc.objet}\n\n${texte}`)
+      L.toast('Texte copié : collez-le dans votre messagerie (pensez à joindre la plaquette).')
+    } catch {
+      L.toast('Copie impossible dans ce navigateur.', 'warn')
+    }
+    if (doc.email) {
+      const url = `mailto:${doc.email}?subject=${encodeURIComponent(doc.objet)}&body=${encodeURIComponent(texte)}`
+      if (url.length < 1900) window.location.href = url
+    }
+  }
+
+  async function marquerEnvoye(doc) {
+    const prospects = await L.prospects()
+    const x = prospects.find((p) => p.id === doc.prospectId)
+    if (!x) {
+      L.toast('Entreprise introuvable dans la liste de prospection.', 'warn')
+      return
+    }
+    if (['À contacter'].includes(x.statut)) x.statut = 'Courrier envoyé'
+    x.journal = [...(x.journal || []), { date: doc.date || L.today(), texte: `Courrier envoyé : ${doc.objet}` }]
+    if (!x.prochaineAction) {
+      x.prochaineAction = 'Relancer par téléphone'
+      x.prochaineDate = L.addDays(doc.date || L.today(), 10)
+    }
+    await L.db.set('prospects', prospects)
+    L.toast(`${x.entreprise} : courrier noté au journal, relance prévue le ${L.frDate(x.prochaineDate)}.`)
   }
 
   // ---------- Paramètres ----------

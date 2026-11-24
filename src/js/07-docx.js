@@ -196,7 +196,7 @@
           this.n += 1
           return this.para(`${this.n}. ${b.text}`, { style: 'Heading1', keepNext: true })
         case 'p':
-          return this.para(b.text, { after: b.space === 'tight' ? 0 : undefined, keepNext: b.keepNext })
+          return this.para(b.text, { after: b.space === 'tight' ? 0 : undefined, keepNext: b.keepNext, align: b.align })
         case 'ul':
           return (b.items || [])
             .map((item) => {

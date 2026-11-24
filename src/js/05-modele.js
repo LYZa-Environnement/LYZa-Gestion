@@ -495,6 +495,80 @@
     }
   }
 
+  // ---------- Courrier ----------
+
+  /**
+   * Corps du courrier : paragraphes séparés par une ligne vide ; un paragraphe
+   * dont toutes les lignes commencent par « - » devient une liste, et la ligne
+   * qui le précède dans le même paragraphe reste un texte d'introduction.
+   */
+  function corpsCourrier(texte) {
+    const blocs = []
+    for (const para of String(texte || '').split(/\n\s*\n/)) {
+      const lignes = para.split('\n').filter((x) => x.trim())
+      if (!lignes.length) continue
+      const intro = []
+      const puces = []
+      for (const l of lignes) (/^\s*[-–•]\s/.test(l) ? puces : intro).push(l)
+      if (intro.length) blocs.push({ t: 'p', text: intro.join(' '), keepNext: puces.length > 0 })
+      if (puces.length) blocs.push({ t: 'ul', items: puces.map((x) => ({ text: x.replace(/^\s*[-–•]\s*/, '') })) })
+    }
+    return blocs
+  }
+
+  function courrier(doc, p) {
+    const i = p.identite
+    const d = doc.destinataire || {}
+    const dest = [d.nom ? `**${d.nom}**` : '', d.contact ? `À l’attention de ${d.contact}` : '', ...String(d.adresse || '').split('\n')]
+      .map((x) => x.trim())
+      .filter(Boolean)
+    const expediteur = [
+      `**${i.nom}**`,
+      `Ingénieur hydrogéologue — ${i.marque}`,
+      i.adresse,
+      `${i.codePostal} ${i.ville}`,
+      `Tél. : ${i.telephone}`,
+      i.courriel,
+    ]
+    const corps = String(doc.corps || '').replace(/\{accroche\}/g, doc.accroche || '')
+    const blocks = [
+      ...enteteLogo(p),
+      {
+        t: 'cols',
+        widths: [50, 50],
+        cols: [
+          expediteur.map((x) => ({ t: 'p', text: x, space: 'tight' })),
+          [{ t: 'space', mm: 14 }, ...dest.map((x) => ({ t: 'p', text: x, space: 'tight' }))],
+        ],
+      },
+      { t: 'space', mm: 6 },
+      { t: 'p', text: `${doc.lieu || p.documents.lieu}, le ${frDate(doc.date)}`, align: 'right' },
+      { t: 'space', mm: 4 },
+      { t: 'p', text: `**Objet :** ${doc.objet || ''}` },
+      { t: 'space', mm: 3 },
+      ...corpsCourrier(corps),
+      { t: 'space', mm: 4 },
+      { t: 'p', text: i.nom, space: 'tight', keepNext: true },
+      { t: 'p', text: `Ingénieur hydrogéologue — ${i.marque}`, keepNext: Boolean(p.signature) },
+      ...(p.signature ? [{ t: 'sign', ...p.signature }] : []),
+      ...(doc.pj ? [{ t: 'space', mm: 4 }, { t: 'p', text: `**PJ :** ${doc.pj}` }] : []),
+    ]
+    return {
+      title: `Courrier ${d.nom || ''}`.trim(),
+      fileName: L.safeName(`Courrier_${d.nom || doc.numero}`),
+      accent: p.documents.couleur,
+      footer: piedDePage(p),
+      blocks,
+    }
+  }
+
+  /** Texte brut du courrier (pour un e-mail). */
+  function texteCourrier(doc, p) {
+    const i = p.identite
+    const corps = String(doc.corps || '').replace(/\{accroche\}/g, doc.accroche || '').replace(/\n{3,}/g, '\n\n')
+    return `${corps}\n\n${i.nom}\nIngénieur hydrogéologue — ${i.marque}\n${i.telephone} — ${i.courriel}\n${i.site}`
+  }
+
   /** Site / exploitation de l'avis (pour la synthèse de facturation). */
   function siteAvis(doc) {
     return (doc.demande || []).find((r) => /site|exploitation/i.test(r.label))?.valeur || ''
@@ -524,11 +598,12 @@
     sectionsDepuisCatalogue,
     fusionnerPuces,
     ponctuer,
-    construire: { devis, facture, avis },
+    construire: { devis, facture, avis, courrier },
     phraseAvis,
     siteAvis,
     demandeurAvis,
     numeroLibre,
+    texteCourrier,
     piedDePage,
   })
 })()

@@ -888,6 +888,189 @@ table.list--analyses tbody tr:hover td {
   cursor: default;
 }
 
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.kpi-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.kpi-head strong {
+  font-size: 1.3rem;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-bar {
+  position: relative;
+  height: 10px;
+  margin: 0.4rem 0 0.25rem;
+  border-radius: 999px;
+  background: #ecebe5;
+  overflow: hidden;
+}
+
+.kpi-cible {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--olive-soft);
+  border-left: 2px solid var(--olive);
+  border-right: 2px solid var(--olive);
+}
+
+.kpi-val {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 999px;
+}
+
+.kpi-val--low {
+  background: #c9853f;
+}
+
+.kpi-val--mid {
+  background: var(--water);
+}
+
+.kpi-val--ok {
+  background: var(--olive);
+}
+
+.kpi-foot {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.details-card summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--navy);
+  margin-bottom: 0.6rem;
+}
+
+.details-card:not([open]) summary {
+  margin-bottom: 0.4rem;
+}
+
+.plan {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.4rem 1.2rem;
+}
+
+.plan-phase h4 {
+  margin: 0.3rem 0 0.3rem;
+  font-size: 0.86rem;
+  color: var(--olive);
+}
+
+.plan-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.plan-item .check {
+  align-items: flex-start;
+  margin-right: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.plan-item .check input {
+  margin-top: 0.2rem;
+}
+
+.plan-item.fait .check {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.journal-add {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.pro {
+  border-top: 1px solid var(--line);
+}
+
+.pro-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 11rem auto;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.6rem 0.2rem;
+}
+
+.pro-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pro-coord {
+  font-size: 0.84rem;
+}
+
+.pro-coord a {
+  color: var(--navy);
+}
+
+.manque {
+  color: #9a5b1d;
+  font-style: italic;
+}
+
+.pro-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.pro-edit {
+  padding: 0.4rem 0.2rem 0.8rem;
+}
+
+.pro-edit h4 {
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+  color: var(--navy);
+}
+
+.journal {
+  margin: 0 0 0.4rem;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+}
+
+.pill--p1 {
+  background: var(--olive);
+  color: #fff;
+}
+
+.pill--p2 {
+  background: var(--warn-soft);
+  color: #7a5a10;
+}
+
+.pill--p3 {
+  background: #ecebe5;
+  color: var(--muted);
+}
+
 #toasts {
   position: fixed;
   right: 1rem;
@@ -968,7 +1151,9 @@ table.list--analyses tbody tr:hover td {
   }
 
   .res-filtres,
-  .res {
+  .res,
+  .pro-row,
+  .journal-add {
     grid-template-columns: 1fr;
   }
 

@@ -85,6 +85,24 @@ Le catalogue du laboratoire contient des **prix d'achat négociés** : il n'est
 pas dans ce dépôt public. Il reste dans le navigateur (et dans les
 sauvegardes), à importer une fois par appareil.
 
+**Prospection** (suivi du business plan)
+- Indicateurs de l'année, calculés depuis les factures émises : forages
+  facturés (au rythme annuel), bénéfice net par mois après charges, coût du
+  laboratoire et frais fixes, nombre de foreurs partenaires, devis en
+  attente ; comparés aux objectifs du business plan (12 à 18 forages par an,
+  300 à 500 € nets par mois, 3 à 4 partenaires), modifiables.
+- Plan d'action du business plan (cadrer, écouter, pilote, lancer) à cocher.
+- Entreprises à contacter : coordonnées (adresse, téléphone, courriel, site,
+  SIREN), priorité, statut, angle d'approche, prochaine action, journal des
+  contacts ; import / export d'une liste `.json`.
+- Courrier aux entreprises de forage : modèle modifiable, complété pour chaque
+  entreprise (adresse, phrase personnalisée), imprimable en PDF ou Word,
+  copiable pour un e-mail ; « Marquer comme envoyé » l'inscrit au journal et
+  programme une relance à 10 jours.
+
+La liste des entreprises et vos notes de prospection ne sont pas dans ce dépôt
+public : elles restent dans le navigateur et dans les sauvegardes.
+
 **Sorties** : impression / PDF depuis le navigateur (le bouton ou Ctrl+P) et
 export Word `.docx` (styles, puces, tableaux, images, pied de page numéroté),
 produit sans bibliothèque. Les deux sorties partent de la même description du

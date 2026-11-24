@@ -133,6 +133,21 @@
     return (await get('analyses')) || null
   }
 
+  /** Entreprises à démarcher (importées ou saisies dans l'onglet Prospection). */
+  async function prospects() {
+    return (await get('prospects')) || []
+  }
+
+  /** Suivi du business plan : objectifs, plan d'action, modèle de courrier. */
+  async function suiviBP() {
+    const saved = (await get('suiviBP')) || {}
+    return {
+      objectifs: { ...L.OBJECTIFS, ...(saved.objectifs || {}) },
+      plan: saved.plan || L.clone(L.PLAN_ACTION).map((x) => ({ ...x, fait: false })),
+      courrier: { ...L.COURRIER, ...(saved.courrier || {}) },
+    }
+  }
+
   async function clients() {
     return (await get('clients')) || []
   }
@@ -181,6 +196,8 @@
     parametres,
     catalogue,
     analyses,
+    prospects,
+    suiviBP,
     clients,
     rememberClient,
     exportAll,

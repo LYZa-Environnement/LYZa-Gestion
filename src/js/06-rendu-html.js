@@ -31,6 +31,7 @@
       case 'p':
         return h('p', {
           class: 'doc-p' + (b.space === 'tight' ? ' doc-p--tight' : '') + (b.keepNext ? ' keep-next' : ''),
+          style: b.align ? { textAlign: b.align } : null,
           html: inline(b.text),
         })
       case 'ul':
