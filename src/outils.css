@@ -493,8 +493,15 @@ td.empty {
   gap: 0.2rem;
 }
 
-.picker select {
+.picker {
+  display: flex;
+  gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.picker select {
+  flex: 1;
+  min-width: 0;
 }
 
 .forfaits {
@@ -706,6 +713,140 @@ td.empty {
   margin-bottom: 0.8rem;
 }
 
+.labo-indic {
+  margin: 0.3rem 0 0;
+}
+
+.labo-indic--perte {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.modal--large {
+  width: min(56rem, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal--large[open] {
+  display: flex;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.modal-head h3 {
+  margin: 0 0 0.6rem;
+  color: var(--navy);
+}
+
+.res-filtres {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 13rem auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.nb-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.nb-ech {
+  width: 4.5rem;
+}
+
+.res-list {
+  flex: 1;
+  min-height: 12rem;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  margin-bottom: 0.6rem;
+}
+
+.res {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.55rem 0.2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.res-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.res-desc {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.res-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.res-prix {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.res-prix span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.btn--done {
+  background: var(--olive-soft);
+  border-color: var(--olive);
+  color: var(--olive);
+}
+
+.search-row {
+  align-items: center;
+  margin-bottom: 0.3rem;
+}
+
+.search-row .search {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.search-matrice {
+  width: auto;
+  min-width: 14rem;
+}
+
+table.list td.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+table.list td.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+table.list--analyses tbody tr:hover td {
+  cursor: default;
+}
+
 #toasts {
   position: fixed;
   right: 1rem;
@@ -783,6 +924,15 @@ td.empty {
   .kv,
   .src {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .res-filtres,
+  .res {
+    grid-template-columns: 1fr;
+  }
+
+  .picker {
+    flex-direction: column;
   }
 }
 

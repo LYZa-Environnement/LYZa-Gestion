@@ -7,6 +7,9 @@
  * déjà émis. Le catalogue se modifie dans l'onglet Catalogue : ces valeurs ne
  * sont que le point de départ.
  *
+ * Les analyses de laboratoire ne sont pas ici : leur prix se calcule à partir
+ * du catalogue du laboratoire importé dans l'onglet Analyses (09-analyses.js).
+ *
  * Pour chaque prestation, « prestations », « hypotheses » et « delai »
  * alimentent les sections du devis du même nom. Une ligne commençant par deux
  * espaces est une sous-puce.
@@ -203,52 +206,6 @@
       delai:
         "Le délai prévisionnel d'intervention est de 2 semaines à compter de la réception de la commande et de l'acceptation du devis. Le délai analytique est généralement de 10 jours ouvrés. La revue des résultats et la fourniture de la note de synthèse sont de 5 jours ouvrés après réception des résultats du laboratoire.",
     },
-    {
-      code: 'ANA-PACK',
-      categorie: 'sols',
-      designation: '**Réalisation d’analyses environnementales** – Pack analytique HCT + COHV + BTEX + 8 métaux',
-      unite: 'Échantillon',
-      prix: 67.6,
-      nature: '',
-      objet: '',
-      prestations: [
-        'Réalisation d’analyses environnementales :',
-        '  - Hydrocarbures C10-C40 (HCT C10-C40) ;',
-        '  - Composés organo-halogénés volatils (COHV) ;',
-        '  - Benzène, toluène, éthylbenzène, xylènes (BTEX) ;',
-        '  - 8 métaux lourds (arsenic, cadmium, chrome, cuivre, mercure, nickel, plomb, zinc) ;',
-      ],
-      hypotheses: [],
-      delai: '',
-    },
-    {
-      code: 'ANA-POP',
-      categorie: 'sols',
-      designation: '**Réalisation d’analyses environnementales** – 11 POP',
-      unite: 'Échantillon',
-      prix: 91,
-      nature: '',
-      objet: '',
-      prestations: ['Réalisation d’analyses environnementales :', '  - 11 pesticides organophosphorés (POP) ;'],
-      hypotheses: [
-        "Bon nombre des composés analysés (notamment les pesticides) ne disposent pas de valeur de référence ou de valeur seuil applicable. Leur analyse permettra donc uniquement de constater leur présence ou leur absence ;",
-      ],
-      delai: '',
-    },
-    {
-      code: 'ANA-POC',
-      categorie: 'sols',
-      designation: '**Réalisation d’analyses environnementales** – 26 POC',
-      unite: 'Échantillon',
-      prix: 91,
-      nature: '',
-      objet: '',
-      prestations: ['Réalisation d’analyses environnementales :', '  - 26 pesticides organochlorés (POC).'],
-      hypotheses: [
-        "Bon nombre des composés analysés (notamment les pesticides) ne disposent pas de valeur de référence ou de valeur seuil applicable. Leur analyse permettra donc uniquement de constater leur présence ou leur absence ;",
-      ],
-      delai: '',
-    },
   ]
 
   /**
@@ -258,7 +215,11 @@
     { libelle: 'Forage agricole (jusqu’à fin 2027)', codes: ['FOR-COUPE', 'FOR-RFT', 'FOR-IOTA'] },
     { libelle: 'Forage agricole (à partir de 2028)', codes: ['FOR-COUPE', 'FOR-RFT', 'FOR-MINIER'] },
     { libelle: 'Forage de 50 m et plus : + cas par cas', codes: ['FOR-CPC'] },
-    { libelle: 'Prélèvement de sol + 3 analyses', codes: ['SOL-PREL', 'ANA-PACK', 'ANA-POP', 'ANA-POC'] },
+    // Les codes « LAB:… » viennent du catalogue du laboratoire importé (onglet Analyses).
+    {
+      libelle: 'Prélèvement de sol + 3 analyses',
+      codes: ['SOL-PREL', 'LAB:sol:PLSDE', 'LAB:sol:PLSXQ', 'LAB:sol:PLSNM', 'LAB-ECH', 'LAB-ENVOI'],
+    },
   ]
 
   Object.assign(L, { CATEGORIES, CATALOGUE, FORFAITS })

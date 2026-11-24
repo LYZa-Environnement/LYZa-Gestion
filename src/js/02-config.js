@@ -38,6 +38,9 @@
       delaiPaiement: 30,
       tva: 'TVA non applicable, article 293 B du Code général des impôts',
     },
+    // Tarification des analyses de laboratoire (voir 09-analyses.js) :
+    // charges = URSSAF + versement libératoire en micro-BNC, en % du CA.
+    analyses: { charges: 28, marge: 20, arrondi: 1 },
   }
 
   const TYPES_CLIENT = {
