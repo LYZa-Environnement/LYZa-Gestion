@@ -118,18 +118,57 @@
     return items
   }
 
-  /** Sections du devis recalculées depuis les prestations du catalogue retenues. */
-  function sectionsDepuisCatalogue(codes, catalogue) {
+  /**
+   * Sections du devis recalculées depuis les lignes : les prestations du
+   * catalogue apportent leurs textes ; les analyses de laboratoire (codes
+   * « LAB:… ») ajoutent leur liste, leurs hypothèses et leur délai.
+   */
+  function sectionsDepuisCatalogue(lignes, catalogue) {
+    const codes = lignes.map((l) => (typeof l === 'string' ? l : l.code)).filter(Boolean)
     const items = codes.map((c) => catalogue.find((x) => x.code === c)).filter(Boolean)
     const uniques = [...new Map(items.map((i) => [i.code, i])).values()]
+    const analyses = lignes.filter((l) => typeof l === 'object' && l.analyse)
+    const aFrais = lignes.some((l) => typeof l === 'object' && /^LAB-/.test(l.code || ''))
+
     const objets = [...new Set(uniques.map((i) => i.objet).filter(Boolean))]
     const natures = [...new Set(uniques.map((i) => i.nature).filter(Boolean))]
     const delais = [...new Set(uniques.map((i) => i.delai).filter(Boolean))]
+    const prestations = uniques.map((i) => i.prestations)
+    const hypotheses = uniques.map((i) => i.hypotheses)
+
+    if (analyses.length) {
+      const matrices = [...new Set(analyses.map((l) => L.MATRICES?.[l.analyse.matrice]?.toLowerCase()).filter(Boolean))]
+      if (!objets.length) objets.push(`la réalisation d'analyses environnementales en laboratoire (${joinFr(matrices)})`)
+      if (!natures.length) natures.push(`Analyses environnementales (${joinFr(matrices)})`)
+      prestations.push([
+        'Réalisation d’analyses environnementales par un laboratoire spécialisé :',
+        ...[...new Set(analyses.map((l) => `${l.analyse.nom} (${L.MATRICES?.[l.analyse.matrice]?.toLowerCase() || ''})`))].map((x) => '  - ' + x),
+      ])
+      if (aFrais) prestations.push(['Flaconnage, envoi des échantillons au laboratoire et élimination après analyse'])
+      const texteItems = (k) => uniques.map((i) => (i[k] || []).join(' ')).join(' ')
+      if (!/résultats/i.test(texteItems('prestations'))) prestations.push(['Transmission des résultats d’analyses du laboratoire'])
+      const h = []
+      if (!/laboratoire/i.test(texteItems('hypotheses'))) {
+        h.push("Les délais d'analyse dépendent du laboratoire et peuvent être ajustés en fonction de ses contraintes opérationnelles")
+      }
+      if (analyses.some((l) => /pesticid|\bpo[cp]\b|glyphosate|organo/i.test(l.analyse.nom))) {
+        h.push(
+          "Bon nombre des composés analysés (notamment les pesticides) ne disposent pas de valeur de référence ou de valeur seuil applicable. Leur analyse permettra donc uniquement de constater leur présence ou leur absence",
+        )
+      }
+      hypotheses.push(h)
+      const jours = analyses.map((l) => Number(l.analyse.delai)).filter((n) => n > 0)
+      // Pas de second délai d'analyse si une prestation retenue en annonce déjà un.
+      if (jours.length && !delais.some((d) => /analytique|d'analyse|d’analyse/i.test(d))) {
+        delais.push(`Le délai analytique standard du laboratoire est de ${Math.max(...jours)} jours ouvrés après réception des échantillons.`)
+      }
+    }
+
     return {
       nature: natures[0] || '',
       objet: objets.length ? `Le présent devis porte sur ${joinFr(objets)}.` : '',
-      prestations: L.bulletsToText(fusionnerPuces(uniques.map((i) => i.prestations))),
-      hypotheses: L.bulletsToText(fusionnerPuces(uniques.map((i) => i.hypotheses))),
+      prestations: L.bulletsToText(fusionnerPuces(prestations)),
+      hypotheses: L.bulletsToText(fusionnerPuces(hypotheses)),
       delai: delais.join('\n'),
     }
   }

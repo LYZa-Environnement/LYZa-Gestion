@@ -49,6 +49,35 @@ légal sur chaque page.
 - Les avis « à facturer » s'importent dans une facture, qui en déduit la
   quantité et note sur chaque avis le numéro de la facture.
 
+**Analyses de laboratoire** (onglet Analyses)
+- Import du catalogue du laboratoire : directement le classeur Excel envoyé
+  par le laboratoire (`.xlsx`, feuille « Import à utiliser »), ou un fichier
+  `.json` déjà extrait. Sont retenues les analyses de **sols**, d'**eaux peu
+  chargées** et d'**eaux chargées**, avec leur délai standard et, quand
+  l'annexe technique les donne, les paramètres de chaque pack ; plus les frais
+  du laboratoire (prise en charge, flaconnage, élimination, collecte).
+- **Prix de vente = coût laboratoire × (1 + marge) ÷ (1 − charges)**, arrondi à
+  l'euro supérieur. Par défaut : charges 28 % (micro-BNC : 25,6 % de
+  cotisations + 0,2 % de formation professionnelle + 2,2 % de versement
+  libératoire), marge nette 20 %. Les deux se règlent dans l'onglet. Exemple :
+  un pack à 52,10 € est vendu 87 € HT et laisse 10,54 € une fois les charges
+  et le laboratoire payés. Revendre une analyse 30 % au-dessus du prix du
+  laboratoire, sans tenir compte des charges, fait perdre de l'argent.
+- Recherche multi-mots, sans accents, qui comprend les abréviations (HCT,
+  HAP, BTEX, COHV, PCB, « 8 métaux » pour arsenic, plomb…, PFAS, POC/POP…),
+  filtrable par matrice.
+- Dans un devis ou une facture, **« Rechercher une analyse »** ouvre la même
+  recherche : choisir le nombre d'échantillons, puis « Ajouter ». Les frais de
+  laboratoire s'ajoutent une fois (par échantillon et par envoi), et le nombre
+  d'échantillons facturé suit les analyses. Les sections du devis (prestations,
+  hypothèses, délai du laboratoire) se complètent seules. Sous le total, un
+  indicateur montre ce qui reste sur les analyses après charges et coût du
+  laboratoire.
+
+Le catalogue du laboratoire contient des **prix d'achat négociés** : il n'est
+pas dans ce dépôt public. Il reste dans le navigateur (et dans les
+sauvegardes), à importer une fois par appareil.
+
 **Sorties** : impression / PDF depuis le navigateur (le bouton ou Ctrl+P) et
 export Word `.docx` (styles, puces, tableaux, images, pied de page numéroté),
 produit sans bibliothèque. Les deux sorties partent de la même description du
@@ -66,7 +95,8 @@ aucun serveur, aucune donnée client dans ce dépôt. Conséquences :
 - les sauvegardes contiennent les clients, les factures et le RIB : ne pas
   les déposer dans ce dépôt (le `.gitignore` les exclut).
 
-Les coordonnées bancaires et la signature se saisissent dans Paramètres.
+Les coordonnées bancaires et la signature se saisissent dans Paramètres. Le
+catalogue du laboratoire s'importe dans l'onglet Analyses.
 
 ## Protection par mot de passe
 
@@ -125,7 +155,8 @@ src/
   js/05-modele.js     calculs et description des documents (devis, facture, avis)
   js/06-rendu-html.js aperçu et impression
   js/07-docx.js       export Word (ZIP + WordprocessingML)
-  js/08-app.js        interface
+  js/08-analyses.js   analyses de laboratoire : import du catalogue, prix, recherche
+  js/09-app.js        interface
 scripts/
   build.mjs           assemblage + chiffrement
   serveur.mjs         serveur local

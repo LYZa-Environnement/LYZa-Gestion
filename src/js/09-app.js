@@ -11,6 +11,7 @@
     ['facture', 'Factures'],
     ['avis', 'Avis sommaires'],
     ['catalogue', 'Catalogue'],
+    ['analyses', 'Analyses'],
     ['parametres', 'Paramètres'],
   ]
   const STATUTS = {
@@ -27,7 +28,7 @@
     ],
   }
 
-  const state = { params: null, catalogue: null, clients: [], doc: null, kind: null }
+  const state = { params: null, catalogue: null, analyses: null, clients: [], doc: null, kind: null }
   let main
   let saveLabel
 
@@ -36,6 +37,7 @@
   async function start() {
     state.params = await L.parametres()
     state.catalogue = await L.catalogue()
+    state.analyses = await L.analyses()
     state.clients = await L.clients()
     const root = document.getElementById('app')
     saveLabel = h('span', { class: 'save-state', 'aria-live': 'polite' })
@@ -79,6 +81,8 @@
     if (['devis', 'facture', 'avis'].includes(vue)) {
       if (id) await ouvrir(vue, decodeURIComponent(id))
       else await liste(vue)
+    } else if (vue === 'analyses') {
+      vueAnalyses()
     } else if (vue === 'catalogue') {
       vueCatalogue()
     } else if (vue === 'parametres') {
@@ -601,6 +605,7 @@
         t.remise > 0 ? h('div', null, 'Sous-total : ', h('strong', null, L.euros(t.brut))) : null,
         t.remise > 0 ? h('div', null, `Remise (${L.qty(t.pct)} %) : `, h('strong', null, '− ' + L.euros(t.remise))) : null,
         h('div', { class: 'total-ht' }, 'Total HT : ', h('strong', null, L.euros(t.ht))),
+        indicateurLabo(doc, t),
       )
       wrap.querySelectorAll('[data-total]').forEach((o) => {
         const l = doc.lignes.find((x) => x.id === o.dataset.total)
@@ -660,7 +665,12 @@
 
     return card(
       'Prestations et prix',
-      h('div', { class: 'picker' }, choix),
+      h(
+        'div',
+        { class: 'picker' },
+        choix,
+        btn('Rechercher une analyse', () => rechercherAnalyse(doc), 'btn--primary', { title: 'Analyses de sol et d’eau du catalogue du laboratoire' }),
+      ),
       h(
         'div',
         { class: 'forfaits' },
@@ -696,30 +706,190 @@
   }
 
   function ajouterPrestations(doc, codes) {
+    const manquantes = []
     for (const code of codes) {
+      if (code.startsWith('LAB:')) {
+        const [, matrice, labCode] = code.split(':')
+        const a = state.analyses?.analyses.find((x) => x.matrice === matrice && x.code === labCode)
+        if (!a) manquantes.push(labCode)
+        else if (!doc.lignes.some((l) => l.code === code)) insererAnalyse(doc, L.ligneAnalyse(a, state.params, 1))
+        continue
+      }
+      if (code === 'LAB-ECH' || code === 'LAB-ENVOI') {
+        if (state.analyses) assurerFrais(doc, 1, code === 'LAB-ECH' ? ['echantillon'] : ['envoi'])
+        continue
+      }
       const item = state.catalogue.find((x) => x.code === code)
       if (!item) continue
       const existante = doc.lignes.find((l) => l.code === code)
       if (existante && doc.kind === 'facture' && code === 'AVIS-URG') continue
-      doc.lignes.push({ id: L.uid(), code, designation: item.designation, unite: item.unite, quantite: 1, prixUnitaire: item.prix })
+      insererAnalyse(doc, { id: L.uid(), code, designation: item.designation, unite: item.unite, quantite: 1, prixUnitaire: item.prix })
     }
+    recompterEchantillons(doc)
+    if (manquantes.length) {
+      L.toast(
+        state.analyses
+          ? `Analyses absentes du catalogue du laboratoire : ${manquantes.join(', ')}.`
+          : 'Importez d’abord le catalogue du laboratoire (onglet Analyses) pour ajouter les analyses.',
+        'warn',
+      )
+    }
+    apresAjout(doc, codes[0])
+  }
+
+  function apresAjout(doc, premierCode) {
     if (doc.kind === 'devis') {
       if (!doc.textesManuels) appliquerSections(doc)
       else L.toast('Les textes du devis ont été modifiés à la main : utilisez « Recomposer depuis le catalogue » pour les mettre à jour.', 'warn')
     } else if (!doc.nature) {
-      const first = state.catalogue.find((x) => x.code === codes[0])
+      const first = state.catalogue.find((x) => x.code === premierCode)
       if (first?.nature) doc.nature = first.nature
     }
     construireFormulaire()
     onChange()
   }
 
-  function appliquerSections(doc) {
-    const s = L.sectionsDepuisCatalogue(
-      doc.lignes.map((l) => l.code).filter(Boolean),
-      state.catalogue,
+  /** Insère une ligne avant les frais de laboratoire, qui restent en fin de tableau. */
+  function insererAnalyse(doc, ligne) {
+    const i = doc.lignes.findIndex((l) => /^LAB-/.test(l.code || ''))
+    if (i < 0 || /^LAB-/.test(ligne.code || '')) doc.lignes.push(ligne)
+    else doc.lignes.splice(i, 0, ligne)
+  }
+
+  /** Ajoute (ou ajuste) les lignes de frais : par échantillon (quantité ≥ n) et par envoi. */
+  function assurerFrais(doc, n, types = ['echantillon', 'envoi']) {
+    if (types.includes('echantillon')) {
+      const ech = doc.lignes.find((l) => l.code === 'LAB-ECH')
+      if (ech) ech.quantite = Math.max(L.parseNumber(ech.quantite), n)
+      else doc.lignes.push(L.ligneFrais('echantillon', state.analyses, state.params, n))
+    }
+    if (types.includes('envoi') && !doc.lignes.some((l) => l.code === 'LAB-ENVOI')) {
+      doc.lignes.push(L.ligneFrais('envoi', state.analyses, state.params, 1))
+    }
+  }
+
+  /**
+   * Frais par échantillon : nombre d'échantillons estimé = pour chaque matrice
+   * (sol, eau…), la plus grande quantité parmi ses analyses (plusieurs analyses
+   * se font sur le même échantillon), puis somme des matrices. Modifiable ensuite.
+   */
+  function recompterEchantillons(doc) {
+    const ech = doc.lignes.find((l) => l.code === 'LAB-ECH')
+    if (!ech) return
+    const parMatrice = {}
+    for (const l of doc.lignes) {
+      if (!l.analyse || l.analyse.matrice === 'frais') continue
+      parMatrice[l.analyse.matrice] = Math.max(parMatrice[l.analyse.matrice] || 0, L.parseNumber(l.quantite))
+    }
+    const n = Object.values(parMatrice).reduce((s, v) => s + v, 0)
+    if (n > 0) ech.quantite = n
+  }
+
+  function indicateurLabo(doc, t) {
+    const labo = doc.lignes.filter((l) => Number(l.prixLabo) > 0)
+    if (!labo.length) return null
+    const cout = labo.reduce((s, l) => s + L.parseNumber(l.quantite) * Number(l.prixLabo), 0)
+    const vente = labo.reduce((s, l) => s + L.parseNumber(l.quantite) * L.parseNumber(l.prixUnitaire), 0) * (1 - (t.pct || 0) / 100)
+    const reste = L.netApresCharges(vente, cout, state.params)
+    return h(
+      'div',
+      { class: 'hint labo-indic' + (reste < 0 ? ' labo-indic--perte' : '') },
+      `Analyses et frais de laboratoire : facturés ${L.euros(vente)}, coût laboratoire ${L.euros(cout)} — reste après charges : ${L.euros(reste)}`,
     )
-    Object.assign(doc, s)
+  }
+
+  function appliquerSections(doc) {
+    Object.assign(doc, L.sectionsDepuisCatalogue(doc.lignes, state.catalogue))
+  }
+
+  // ---------- Recherche d'analyses (fenêtre) ----------
+
+  function rechercherAnalyse(doc) {
+    if (!state.analyses) {
+      if (confirm("Aucun catalogue de laboratoire n'est importé sur cet appareil. Ouvrir l'onglet Analyses pour l'importer ?")) location.hash = '#/analyses'
+      return
+    }
+    const opts = { q: '', matrice: '', n: 1 }
+    const recherche = h('input', { type: 'search', placeholder: 'Ex. : arsenic, HAP eau, pesticides sol, PLSDE…', 'aria-label': 'Rechercher une analyse' })
+    const matrice = h(
+      'select',
+      { 'aria-label': 'Matrice' },
+      h('option', { value: '' }, 'Toutes les matrices'),
+      Object.entries(L.MATRICES).map(([k, v]) => h('option', { value: k }, v)),
+    )
+    const nb = h('input', { type: 'number', min: 1, value: 1, 'aria-label': "Nombre d'échantillons", class: 'nb-ech' })
+    const frais = h('input', { type: 'checkbox', checked: !doc.lignes.some((l) => l.code === 'LAB-ECH') })
+    const liste = h('div', { class: 'res-list', role: 'list' })
+    const compte = h('span', { class: 'hint' })
+
+    const draw = () => {
+      const res = L.rechercherAnalyses(state.analyses, opts.q, { matrice: opts.matrice, limite: 60 })
+      compte.textContent = res.length >= 60 ? '60 premiers résultats — précisez la recherche' : `${res.length} résultat${res.length > 1 ? 's' : ''}`
+      fill(
+        liste,
+        res.map((a) => {
+          const pv = L.prixVente(a.prix, state.params)
+          const b = btn('Ajouter', () => {
+            const code = `LAB:${a.matrice}:${a.code}`
+            const n = Math.max(1, L.parseNumber(nb.value) || 1)
+            const exist = doc.lignes.find((l) => l.code === code)
+            if (exist) exist.quantite = L.parseNumber(exist.quantite) + n
+            else insererAnalyse(doc, L.ligneAnalyse(a, state.params, n))
+            if (frais.checked && a.matrice !== 'frais') {
+              assurerFrais(doc, n)
+              frais.checked = false
+            }
+            recompterEchantillons(doc)
+            apresAjout(doc, code)
+            b.textContent = exist ? 'Quantité +' + n : 'Ajouté ✓'
+            b.classList.add('btn--done')
+          }, 'btn--small')
+          return h(
+            'div',
+            { class: 'res', role: 'listitem' },
+            h(
+              'div',
+              { class: 'res-main' },
+              h('strong', null, a.nom),
+              a.description ? h('span', { class: 'res-desc' }, a.description) : null,
+              h('span', { class: 'res-meta' }, [a.code, L.MATRICES[a.matrice], a.rubrique, a.delai ? `délai ${a.delai} j` : ''].filter(Boolean).join(' · ')),
+            ),
+            h('div', { class: 'res-prix' }, h('strong', null, L.euros(pv)), h('span', null, `labo ${L.euros(a.prix)}`)),
+            b,
+          )
+        }),
+      )
+    }
+    recherche.addEventListener('input', () => {
+      opts.q = recherche.value
+      draw()
+    })
+    matrice.addEventListener('change', () => {
+      opts.matrice = matrice.value
+      draw()
+    })
+
+    const dialog = h(
+      'dialog',
+      { class: 'modal modal--large' },
+      h('div', { class: 'modal-head' }, h('h3', null, 'Rechercher une analyse'), compte),
+      h('div', { class: 'res-filtres' }, recherche, matrice, h('label', { class: 'nb-label' }, 'Échantillons ', nb)),
+      h('label', { class: 'check' }, frais, ' Ajouter les frais de laboratoire (par échantillon et par envoi), si absents'),
+      liste,
+      h(
+        'div',
+        { class: 'inline-actions' },
+        btn('Fermer', () => {
+          dialog.close()
+          dialog.remove()
+        }, 'btn--primary'),
+      ),
+    )
+    dialog.addEventListener('close', () => dialog.remove())
+    document.body.append(dialog)
+    dialog.showModal()
+    draw()
+    recherche.focus()
   }
 
   function blocNumero(doc, kind) {
@@ -1337,6 +1507,179 @@
     )
   }
 
+  // ---------- Analyses de laboratoire ----------
+
+  function vueAnalyses() {
+    const cat = state.analyses
+    const p = state.params
+    const t = p.analyses
+
+    const fichier = h('input', { type: 'file', accept: '.xlsx,.json,application/json', class: 'visually-hidden', id: 'analyses-file' })
+    fichier.addEventListener('change', async () => {
+      const file = fichier.files?.[0]
+      if (!file) return
+      try {
+        L.toast('Lecture du catalogue…')
+        const nouveau = await L.importerFichier(file)
+        nouveau.importe = new Date().toISOString()
+        await L.db.set('analyses', nouveau)
+        state.analyses = nouveau
+        const n = nouveau.analyses.filter((a) => a.matrice !== 'frais').length
+        L.toast(`${n} analyses importées.`)
+        vueAnalyses()
+      } catch (e) {
+        console.error(e)
+        L.toast(e.message, 'warn')
+      }
+    })
+
+    const importer = h('label', { class: 'btn btn--primary', for: 'analyses-file' }, cat ? 'Remplacer le catalogue' : 'Importer le catalogue du laboratoire')
+
+    if (!cat) {
+      fill(
+        main,
+        h('div', { class: 'list-head' }, h('h1', null, 'Analyses de laboratoire'), h('div', { class: 'list-actions' }, importer)),
+        fichier,
+        card(
+          null,
+          h(
+            'p',
+            null,
+            'Le catalogue du laboratoire contient vos prix d’achat négociés : il n’est pas publié avec l’outil, dont le code est public. Importez-le une fois sur chaque appareil ; il est ensuite enregistré dans ce navigateur et inclus dans vos sauvegardes.',
+          ),
+          h(
+            'p',
+            null,
+            'Fichiers acceptés : le classeur Excel envoyé par le laboratoire (.xlsx, avec la feuille « Import à utiliser ») ou un fichier .json déjà extrait.',
+          ),
+          h('label', { class: 'drop', for: 'analyses-file' }, 'Choisir le fichier du catalogue…'),
+        ),
+      )
+      return
+    }
+
+    const persist = L.debounce(async () => {
+      await L.db.set('parametres', p)
+      saveLabel.textContent = 'Tarification enregistrée ✓'
+    }, 400)
+    onChange = () => {
+      persist()
+      majExemple()
+      dessiner()
+    }
+
+    const parMatrice = cat.analyses.reduce((acc, a) => ((acc[a.matrice] = (acc[a.matrice] || 0) + 1), acc), {})
+    const exemple = h('p', { class: 'hint' })
+    const exempleAnalyse = cat.analyses.find((a) => a.code === 'PLSDE') || cat.analyses.find((a) => a.matrice !== 'frais')
+    const majExemple = () => {
+      const pv = L.prixVente(exempleAnalyse.prix, p)
+      const fe = L.ligneFrais('echantillon', cat, p)
+      const fv = L.ligneFrais('envoi', cat, p)
+      fill(
+        exemple,
+        `Exemple : ${exempleAnalyse.nom} — laboratoire ${L.euros(exempleAnalyse.prix)} → vendu ${L.euros(pv)} HT, il vous reste ${L.euros(L.netApresCharges(pv, exempleAnalyse.prix, p))} après charges. `,
+        `Frais par échantillon : ${L.euros(fe.prixLabo)} → ${L.euros(fe.prixUnitaire)} ; frais par envoi : ${L.euros(fv.prixLabo)} → ${L.euros(fv.prixUnitaire)}.`,
+      )
+    }
+    majExemple()
+
+    const recherche = h('input', { type: 'search', class: 'search', placeholder: 'Rechercher (paramètre, pack, code…)', 'aria-label': 'Rechercher une analyse' })
+    const matrice = h(
+      'select',
+      { 'aria-label': 'Matrice', class: 'search-matrice' },
+      h('option', { value: '' }, 'Toutes les matrices'),
+      Object.entries(L.MATRICES).map(([k, v]) => h('option', { value: k }, `${v} (${parMatrice[k] || 0})`)),
+    )
+    const tbody = h('tbody')
+    const compte = h('p', { class: 'hint' })
+    const dessiner = () => {
+      const res = L.rechercherAnalyses(cat, recherche.value, { matrice: matrice.value, limite: 300 })
+      compte.textContent = res.length >= 300 ? '300 premiers résultats affichés — précisez la recherche.' : `${res.length} analyse${res.length > 1 ? 's' : ''}.`
+      fill(
+        tbody,
+        res.map((a) => {
+          const pv = L.prixVente(a.prix, p)
+          return h(
+            'tr',
+            null,
+            h('td', { class: 'mono' }, a.code),
+            h('td', null, h('strong', null, a.nom), a.description ? h('div', { class: 'res-desc' }, a.description) : null),
+            h('td', null, L.MATRICES[a.matrice]),
+            h('td', null, a.rubrique),
+            h('td', { class: 'num' }, a.delai ? `${a.delai} j` : '—'),
+            h('td', { class: 'num' }, L.euros(a.prix)),
+            h('td', { class: 'num strong' }, L.euros(pv)),
+            h('td', { class: 'num' }, L.euros(L.netApresCharges(pv, a.prix, p))),
+          )
+        }),
+      )
+    }
+    recherche.addEventListener('input', dessiner)
+    matrice.addEventListener('change', dessiner)
+
+    const nbAnalyses = cat.analyses.length - (parMatrice.frais || 0)
+    fill(
+      main,
+      h(
+        'div',
+        { class: 'list-head' },
+        h('h1', null, 'Analyses de laboratoire'),
+        h(
+          'div',
+          { class: 'list-actions' },
+          importer,
+          btn('Exporter (.json)', () => {
+            const { importe: _i, ...data } = cat
+            L.download(`LYZa_analyses_${L.safeName(cat.source || 'laboratoire')}.json`, new Blob([JSON.stringify(data)], { type: 'application/json' }))
+          }),
+          btn('Supprimer le catalogue', async () => {
+            if (!confirm('Supprimer le catalogue du laboratoire de ce navigateur ? Les devis existants gardent leurs lignes.')) return
+            await L.db.del('analyses')
+            state.analyses = null
+            vueAnalyses()
+          }, 'btn--danger'),
+        ),
+      ),
+      fichier,
+      h(
+        'p',
+        { class: 'hint' },
+        `${nbAnalyses} analyses (sol ${parMatrice.sol || 0}, eau peu chargée ${parMatrice.epc || 0}, eau chargée ${parMatrice.ec || 0}) et ${parMatrice.frais || 0} frais — ${cat.source || 'catalogue'}, importé le ${new Date(cat.importe || cat.date).toLocaleDateString('fr-FR')}.`,
+      ),
+      card(
+        'Tarification',
+        h(
+          'p',
+          { class: 'hint' },
+          'Prix de vente = coût laboratoire × (1 + marge) ÷ (1 − charges), arrondi au-dessus. Les charges (URSSAF et impôt en versement libératoire) s’appliquent à tout le chiffre d’affaires, analyses comprises. Les devis déjà faits gardent leurs prix.',
+        ),
+        row(
+          field('Charges sur le CA (%)', inp(t, 'charges', { inputmode: 'decimal', onInput: (v) => (t.charges = L.parseNumber(v)) }), 'Micro-BNC : 25,6 % + 0,2 % + 2,2 % de versement libératoire.'),
+          field('Marge nette visée (%)', inp(t, 'marge', { inputmode: 'decimal', onInput: (v) => (t.marge = L.parseNumber(v)) }), 'Couvre la commande, l’avance des frais, les impayés et les reprises.'),
+          field('Arrondi (€)', inp(t, 'arrondi', { inputmode: 'decimal', onInput: (v) => (t.arrondi = L.parseNumber(v)) }), '1 = à l’euro supérieur.'),
+        ),
+        exemple,
+      ),
+      h('div', { class: 'row search-row' }, recherche, matrice),
+      compte,
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'list list--analyses' },
+          h(
+            'thead',
+            null,
+            h('tr', null, ['Code', 'Analyse', 'Matrice', 'Rubrique', 'Délai', 'Coût labo', 'Prix de vente HT', 'Reste après charges'].map((x) => h('th', null, x))),
+          ),
+          tbody,
+        ),
+      ),
+    )
+    dessiner()
+  }
+
   // ---------- Paramètres ----------
 
   async function vueParametres() {
@@ -1366,6 +1709,7 @@
         const n = await L.importAll(json, { remplacer })
         state.params = await L.parametres()
         state.catalogue = await L.catalogue()
+        state.analyses = await L.analyses()
         state.clients = await L.clients()
         L.toast(`${n} éléments importés.`)
         vueParametres()

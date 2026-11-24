@@ -113,6 +113,7 @@
       banque: mergeNonEmpty(def.banque, saved.banque || {}),
       signature: saved.signature ?? def.signature,
       documents: { ...def.documents, ...(saved.documents || {}) },
+      analyses: { ...def.analyses, ...(saved.analyses || {}) },
     }
   }
 
@@ -125,6 +126,11 @@
   async function catalogue() {
     const saved = await get('catalogue')
     return saved && saved.length ? saved : L.clone(L.CATALOGUE)
+  }
+
+  /** Catalogue d'analyses importé (null tant qu'aucun import n'a été fait). */
+  async function analyses() {
+    return (await get('analyses')) || null
   }
 
   async function clients() {
@@ -174,6 +180,7 @@
     getDoc,
     parametres,
     catalogue,
+    analyses,
     clients,
     rememberClient,
     exportAll,
