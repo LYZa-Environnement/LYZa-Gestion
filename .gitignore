@@ -1,0 +1,11 @@
+# Page assemblée par le build (publiée par GitHub Actions, jamais committée)
+dist/
+
+# Sauvegardes exportées depuis l'onglet Paramètres : elles contiennent les
+# clients, les factures et le RIB. Ne jamais les committer dans ce dépôt public.
+LYZa_outils_sauvegarde_*.json
+*.sauvegarde.json
+
+node_modules/
+.DS_Store
+.env

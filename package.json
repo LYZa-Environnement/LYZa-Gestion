@@ -1,0 +1,16 @@
+{
+  "name": "lyza-gestion",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Outils internes LYZa : devis, factures et avis hydrogéologiques sommaires.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/serveur.mjs",
+    "build": "node scripts/build.mjs",
+    "build:clair": "node scripts/build.mjs --clair",
+    "preview": "node scripts/serveur.mjs --dist"
+  }
+}
