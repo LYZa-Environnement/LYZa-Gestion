@@ -65,7 +65,14 @@ légal sur chaque page.
   laboratoire, sans tenir compte des charges, fait perdre de l'argent.
 - Recherche multi-mots, sans accents, qui comprend les abréviations (HCT,
   HAP, BTEX, COHV, PCB, « 8 métaux » pour arsenic, plomb…, PFAS, POC/POP…),
-  filtrable par matrice.
+  filtrable par matrice, avec une case « Packs uniquement ».
+- **Recherche dans le contenu des packs** : chercher un paramètre (arsenic,
+  benzo(a)pyrène, PCB 153, trichloroéthylène…) fait apparaître tous les packs
+  qui le contiennent, avec « Contient : … », les familles du pack et le détail
+  dépliable de ses paramètres. La composition vient, par ordre de priorité, de
+  l'annexe technique du laboratoire, de son outil « Recherche PACK », puis de
+  l'intitulé du pack (8 ou 12 métaux, HAP 16, BTEX, COHV, PCB 7, HCT, ISDI…).
+  Importer le classeur d'origine du laboratoire donne l'annexe complète.
 - Dans un devis ou une facture, **« Rechercher une analyse »** ouvre la même
   recherche : choisir le nombre d'échantillons, puis « Ajouter ». Les frais de
   laboratoire s'ajoutent une fois (par échantillon et par envoi), et le nombre

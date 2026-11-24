@@ -57,6 +57,137 @@
     [/\bfiltration\b|filtre/i, 'filtration eaux souterraines'],
   ]
 
+  // Composition des familles d'analyses courantes. Elle sert quand l'annexe
+  // technique du laboratoire ne détaille pas un pack : la composition est
+  // alors déduite de l'outil « Recherche PACK » du classeur ou de l'intitulé.
+  const GROUPES = {
+    metaux8: {
+      libelle: '8 métaux',
+      parametres: ['Arsenic (As)', 'Cadmium (Cd)', 'Chrome (Cr)', 'Cuivre (Cu)', 'Mercure (Hg)', 'Nickel (Ni)', 'Plomb (Pb)', 'Zinc (Zn)'],
+    },
+    metaux12: {
+      libelle: '12 métaux',
+      parametres: [
+        'Antimoine (Sb)', 'Arsenic (As)', 'Baryum (Ba)', 'Cadmium (Cd)', 'Chrome (Cr)', 'Cuivre (Cu)',
+        'Mercure (Hg)', 'Molybdène (Mo)', 'Nickel (Ni)', 'Plomb (Pb)', 'Sélénium (Se)', 'Zinc (Zn)',
+      ],
+    },
+    hap16: {
+      libelle: 'HAP (16)',
+      parametres: [
+        'Naphtalène', 'Acénaphtylène', 'Acénaphtène', 'Fluorène', 'Phénanthrène', 'Anthracène', 'Fluoranthène', 'Pyrène',
+        'Benzo(a)anthracène', 'Chrysène', 'Benzo(b)fluoranthène', 'Benzo(k)fluoranthène', 'Benzo(a)pyrène',
+        'Dibenzo(a,h)anthracène', 'Benzo(ghi)pérylène', 'Indéno(1,2,3-cd)pyrène',
+      ],
+    },
+    btex: { libelle: 'BTEX', parametres: ['Benzène', 'Toluène', 'Éthylbenzène', 'm+p-Xylène', 'o-Xylène'] },
+    cohv: {
+      libelle: 'COHV',
+      parametres: [
+        'Chlorure de vinyle', '1,1-Dichloroéthylène', 'Dichlorométhane', 'Trans-1,2-dichloroéthylène', '1,1-Dichloroéthane',
+        'cis-1,2-Dichloroéthylène', 'Chloroforme', '1,1,1-Trichloroéthane', 'Tétrachlorométhane', '1,2-Dichloroéthane',
+        'Trichloroéthylène', '1,1,2-Trichloroéthane', 'Tétrachloroéthylène', '1,2-Dibromoéthane', 'Bromoforme',
+        'Dibromométhane', 'Bromochlorométhane', 'Bromodichlorométhane', 'Dibromochlorométhane',
+      ],
+    },
+    cohvMacaoh: { libelle: 'COHV (liste MACAOH)', parametres: ['COHV liste MACAOH'] },
+    pcb7: { libelle: 'PCB (7)', parametres: ['PCB 28', 'PCB 52', 'PCB 101', 'PCB 118', 'PCB 138', 'PCB 153', 'PCB 180'] },
+    hct1040: { libelle: 'HCT C10-C40', parametres: ['Indice hydrocarbures (C10-C40)', 'Fractions C10 à C40'] },
+    hct510: { libelle: 'HCT C5-C10', parametres: ['Hydrocarbures volatils (C5-C10)'] },
+    naphtalene: { libelle: 'Naphtalène', parametres: ['Naphtalène'] },
+    mtbe: { libelle: 'MTBE', parametres: ['Méthyl-tertio-butyléther (MTBE)'] },
+    etbe: { libelle: 'ETBE', parametres: ['Éthyl-tertio-butyléther (ETBE)'] },
+    azote: { libelle: 'Azote global', parametres: ['Azote Kjeldahl (NTK)', 'Nitrites (NO2)', 'Nitrates (NO3)'] },
+    dcodbo: { libelle: 'DCO / DBO5', parametres: ['Demande chimique en oxygène (DCO)', 'Demande biochimique en oxygène (DBO5)'] },
+    isdi: {
+      libelle: 'Acceptation en ISDI (arrêté du 12/12/2014)',
+      parametres: [
+        'Lixiviation (éluat)', 'Chlorures (éluat)', 'Fluorures (éluat)', 'Sulfates (éluat)', 'Indice phénol (éluat)',
+        'COT sur éluat', 'Fraction soluble', 'COT sur brut',
+      ],
+    },
+  }
+
+  // Intitulé -> familles. Les packs « 12 métaux » ne sont pas comptés aussi en « 8 métaux ».
+  const DETECTION = [
+    ['metaux12', /\b12\s*(m[ée]t|mtx)/i],
+    ['metaux8', /\b8\s*(m[ée]t|mtx)/i],
+    ['hap16', /\bhap|\b1[56]\s*hap/i],
+    ['btex', /\bbtex\b/i],
+    ['cohvMacaoh', /macaoh/i],
+    ['cohv', /\bcohv\b/i],
+    ['pcb7', /\bpcb\b/i],
+    ['hct1040', /\bhct\b|c10\s*-?\s*c40|hydrocarbures totaux/i],
+    ['hct510', /c5\s*-?\s*c10|>\s*(me)?c5|c5\s*-\s*c40|\(>c5/i],
+    ['naphtalene', /naphtal[eè]ne|\+\s*n\b/i],
+    ['mtbe', /\bmtbe\b/i],
+    ['etbe', /\betbe\b/i],
+    ['azote', /azote global|\bntk\b/i],
+    ['dcodbo', /dco\s*\/\s*dbo/i],
+    ['isdi', /lixitest|isdi|12\/12\/2014/i],
+  ]
+
+  // Colonnes de l'outil « Recherche PACK » du classeur -> familles.
+  const COLONNES_PACK = [
+    [/^hct c5/, 'hct510'],
+    [/^hct c10/, 'hct1040'],
+    [/^btex/, 'btex'],
+    [/^cohv macaoh/, 'cohvMacaoh'],
+    [/^cohv/, 'cohv'],
+    [/^8 metaux/, 'metaux8'],
+    [/^hap/, 'hap16'],
+    [/^napht/, 'naphtalene'],
+    [/^pcb/, 'pcb7'],
+    [/^mtbe/, 'mtbe'],
+    [/^etbe/, 'etbe'],
+  ]
+
+  const ESTPACK = /pack|bilan|paquet|package|lixitest|\+|pas s4/i
+
+  /** Familles d'un pack d'après son intitulé (et sa description). */
+  function familles(a) {
+    const texte = `${a.nom} ${a.description || ''}`
+    if (!ESTPACK.test(`${texte} ${a.rubrique || ''}`)) return []
+    const out = []
+    for (const [cle, re] of DETECTION) {
+      if (!re.test(texte)) continue
+      if (cle === 'metaux8' && out.includes('metaux12')) continue
+      if (cle === 'cohv' && out.includes('cohvMacaoh')) continue
+      out.push(cle)
+    }
+    // Un pack ISDI contient aussi les 12 métaux sur éluat et HCT, BTEX, PCB, HAP sur brut.
+    if (out.includes('isdi')) for (const k of ['metaux12', 'hct1040', 'btex', 'pcb7', 'hap16']) if (!out.includes(k)) out.push(k)
+    return out
+  }
+
+  /**
+   * Complète la composition d'une analyse : familles (déduites ou fournies par
+   * « Recherche PACK ») et liste des paramètres correspondants. Les paramètres
+   * exacts de l'annexe technique, quand elle les donne, restent prioritaires.
+   */
+  function completer(a) {
+    if (a._complete) return a
+    const cles = [...new Set([...(a.familles || []), ...familles(a)])].filter((k) => GROUPES[k])
+    a.familles = cles
+    a.composants = cles.map((k) => GROUPES[k].libelle)
+    const deduits = [...new Set(cles.flatMap((k) => GROUPES[k].parametres))]
+    const exacts = a.parametres?.length > 1 ? a.parametres : []
+    // Paramètres déduits absents de la liste du laboratoire (qui peut être partielle).
+    const base = (x) => norm(x.replace(/\([^)]*\)/g, ''))
+    const connus = new Set(exacts.map(base))
+    const ajouts = deduits.filter((x) => !connus.has(base(x)))
+    a.contenu = [...exacts, ...ajouts]
+    a.contenuSource = exacts.length ? (ajouts.length ? 'laboratoire et intitulé' : 'laboratoire') : deduits.length ? 'intitulé' : ''
+    Object.defineProperty(a, '_deduits', { value: deduits, enumerable: false, configurable: true })
+    Object.defineProperty(a, '_complete', { value: true, enumerable: false })
+    return a
+  }
+
+  function estPack(a) {
+    completer(a)
+    return a.composants.length > 0 || (a.parametres || []).length > 1 || ESTPACK.test(`${a.nom} ${a.rubrique || ''}`)
+  }
+
   // ---------- Outils ----------
 
   function norm(s) {
@@ -155,12 +286,49 @@
       const ct = colonne(ha.cells, (c) => c === 'code test')
       const cn = colonne(ha.cells, (c) => c === 'parametres')
       const cnt = colonne(ha.cells, (c) => c === 'nom test')
+      // Dans l'annexe technique, le code du pack n'est écrit que sur sa
+      // première ligne : les lignes suivantes sans code lui appartiennent.
+      // Avant le premier pack, une ligne sans code est une analyse seule.
+      let pack = ''
+      let test = ''
       for (const r of annexe.slice(ha.index + 1)) {
-        const code = String(r[cp] ?? '').trim() || String(r[ct] ?? '').trim()
+        const cPack = String(r[cp] ?? '').trim()
+        const cTest = String(r[ct] ?? '').trim()
+        if (cPack) pack = cPack
+        if (cTest) test = cTest
+        const code = pack || test
         const p = String(r[cn] ?? '').trim() || String(r[cnt] ?? '').trim()
-        if (!code || !p || p === '/') continue
+        if (!code || !p || p === '/' || /^\(vide\)$/.test(p)) continue
         if (!parametres.has(code)) parametres.set(code, new Set())
         parametres.get(code).add(p)
+        if (pack && cTest && cTest !== pack) {
+          // le test appartient aussi à lui-même (analyse seule)
+          if (!parametres.has(cTest)) parametres.set(cTest, new Set())
+          parametres.get(cTest).add(p)
+        }
+      }
+    }
+
+    // Outil « Recherche PACK » : composition des packs hydrocarbures / métaux par matrice.
+    const famillesPack = new Map()
+    const rp = feuille((n) => n.startsWith('recherche pack'))
+    if (rp) {
+      const hr = enTete(rp, 'code sol', 'nom du pack')
+      if (hr) {
+        const cols = []
+        hr.cells.forEach((c, i) => {
+          const f = COLONNES_PACK.find(([re]) => re.test(c))
+          if (f) cols.push([i, f[1]])
+        })
+        const codes = { sol: colonne(hr.cells, (c) => c === 'code sol'), epc: colonne(hr.cells, (c) => c === 'code epc'), ec: colonne(hr.cells, (c) => c === 'code ec') }
+        for (const r of rp.slice(hr.index + 1)) {
+          const f = cols.filter(([i]) => /x/i.test(String(r[i] ?? ''))).map(([, k]) => k)
+          if (!f.length) continue
+          for (const [m, i] of Object.entries(codes)) {
+            const code = String(r[i] ?? '').trim()
+            if (i >= 0 && /^[A-Z0-9]{4,6}$/.test(code)) famillesPack.set(`${m}:${code}`, f)
+          }
+        }
       }
     }
 
@@ -200,7 +368,8 @@
         rubrique,
         prix,
         delai: d?.delai ?? null,
-        parametres: [...(parametres.get(code) || [])].slice(0, 80),
+        parametres: [...(parametres.get(code) || [])].slice(0, 150),
+        familles: famillesPack.get(cle) || [],
       })
     }
     if (!analyses.some((a) => a.matrice !== 'frais')) throw new Error('Aucune analyse de sol ou d’eau trouvée dans le classeur.')
@@ -373,7 +542,8 @@
 
   function indexer(a) {
     if (a._index) return a._index
-    const base = [a.code, a.nom, a.description, a.rubrique, MATRICES[a.matrice], ...(a.parametres || [])].join(' ')
+    completer(a)
+    const base = [a.code, a.nom, a.description, a.rubrique, MATRICES[a.matrice], ...(a.parametres || []), ...a._deduits, ...a.composants].join(' ')
     const extras = DEVELOPPEMENTS.filter(([re]) => re.test(`${a.nom} ${a.description || ''}`)).map(([, mots]) => mots)
     Object.defineProperty(a, '_index', { value: norm(`${base} ${extras.join(' ')}`), enumerable: false })
     Object.defineProperty(a, '_nom', { value: norm(`${a.code} ${a.nom} ${a.description || ''}`), enumerable: false })
@@ -381,8 +551,8 @@
   }
 
   /** Recherche multi-mots, insensible aux accents ; les correspondances dans l'intitulé passent devant. */
-  function rechercher(catalogue, texte, { matrice = '', limite = 80 } = {}) {
-    const liste = (catalogue?.analyses || []).filter((a) => !matrice || a.matrice === matrice)
+  function rechercher(catalogue, texte, { matrice = '', limite = 80, packs = false } = {}) {
+    const liste = (catalogue?.analyses || []).filter((a) => (!matrice || a.matrice === matrice) && (!packs || estPack(a)))
     const mots = norm(texte).split(' ').filter(Boolean)
     if (!mots.length) return liste.slice(0, limite)
     const res = []
@@ -400,8 +570,25 @@
     return res.sort((x, y) => y[0] - x[0] || x[1].prix - y[1].prix).slice(0, limite).map((x) => x[1])
   }
 
+  /**
+   * Paramètres d'un pack qui correspondent à la recherche, quand l'intitulé du
+   * pack ne contient pas lui-même les mots cherchés (« aluminium » -> pack métaux).
+   */
+  function correspondances(a, texte) {
+    indexer(a)
+    const mots = norm(texte).split(' ').filter((m) => m.length > 1)
+    if (!mots.length) return []
+    if (mots.every((m) => a._nom.includes(m))) return []
+    const tous = [...new Set([...(a.parametres || []), ...a._deduits])]
+    return tous.filter((p) => mots.some((m) => norm(p).includes(m))).slice(0, 4)
+  }
+
   Object.assign(L, {
     MATRICES,
+    GROUPES,
+    completerAnalyse: completer,
+    estPack,
+    correspondances,
     TARIF_DEFAUT,
     extraireCatalogue,
     lireXlsx,
